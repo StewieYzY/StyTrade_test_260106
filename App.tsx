@@ -6,7 +6,7 @@ import {
 import { 
   Search, Play, ShieldAlert, BarChart3, MessageSquare, 
   FileText, TrendingUp, TrendingDown, ClipboardCheck, 
-  Activity, Loader2, RefreshCw, Calendar, Tag, History, LayoutDashboard, ChevronRight, ArrowLeft, X, Filter, Clock, AlertTriangle, Coffee, Timer, Zap, ShieldCheck, AlertCircle, Info, Settings, Save, RotateCcw, Download, Beaker, Edit3, Check, Ban, Eye, FileOutput, ExternalLink, Gauge, Square, Lock, Key
+  Activity, Loader2, RefreshCw, Calendar, Tag, History, LayoutDashboard, ChevronRight, ArrowLeft, X, Filter, Clock, AlertTriangle, Coffee, Timer, Zap, ShieldCheck, AlertCircle, Info, Settings, Save, RotateCcw, Download, Beaker, Edit3, Check, Ban, Eye, FileOutput, ExternalLink, Gauge, Square, Lock, Key, Cpu
 } from 'lucide-react';
 import { DatePicker, Select, ConfigProvider, theme, Switch, Tooltip as AntTooltip, Modal, Button, Tag as AntTag, notification, Progress, Input } from 'antd';
 import dayjs from 'dayjs';
@@ -131,7 +131,90 @@ const SentimentMetricsPanel = ({ metrics, isWorking }: { metrics?: SentimentMetr
   );
 };
 
-export default function App() {
+/**
+ * 终端鉴权网关 - 手动输入 API Key 的全屏认证组件
+ */
+function AuthGate({ onInitialize }: { onInitialize: (key: string) => void }) {
+  const [keyInput, setKeyInput] = useState('');
+  const [isInitializing, setIsInitializing] = useState(false);
+
+  const handleInit = () => {
+    if (!keyInput.trim().startsWith('AIza')) {
+      notification.error({ 
+        message: '无效凭证', 
+        description: '请输入有效的 Gemini API Key (通常以 AIza 开头)' 
+      });
+      return;
+    }
+    setIsInitializing(true);
+    // 模拟一段极短的校验动画
+    setTimeout(() => {
+      onInitialize(keyInput.trim());
+      setIsInitializing(false);
+    }, 800);
+  };
+
+  return (
+    <div className="h-screen w-screen bg-[#020617] flex items-center justify-center p-6 font-sans overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.06),transparent_70%)] animate-pulse" />
+      <div className="max-w-md w-full bg-slate-900/40 border border-slate-800 rounded-3xl p-10 backdrop-blur-3xl shadow-2xl relative z-10 animate-in fade-in zoom-in duration-700">
+        <div className="flex flex-col items-center mb-10">
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-600/30 mb-8 relative">
+             <div className="absolute inset-0 bg-blue-500 blur-xl opacity-20 animate-pulse" />
+             <Lock className="w-8 h-8 text-white relative z-10" />
+          </div>
+          <h1 className="text-3xl font-black text-white tracking-tighter">StGTrade <span className="text-blue-500">AI</span></h1>
+          <p className="text-slate-500 text-[10px] font-mono uppercase tracking-[0.3em] mt-3">Advanced Quantitative Terminal</p>
+        </div>
+        
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] ml-1">Terminal Credentials</label>
+            <Input.Password 
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleInit()}
+              placeholder="输入您的 Gemini API Key..."
+              className="bg-slate-950/80 border-slate-800 text-white h-12 rounded-xl"
+              autoFocus
+            />
+          </div>
+
+          <button 
+            onClick={handleInit}
+            disabled={isInitializing}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-2xl shadow-blue-600/20 transition-all flex items-center justify-center gap-3 active:scale-[0.97] disabled:opacity-50 group"
+          >
+            {isInitializing ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+              <>
+                <Zap className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                <span className="tracking-tight">初始化加密终端</span>
+              </>
+            )}
+          </button>
+
+          <div className="flex items-start gap-3 opacity-60 px-2 pt-2">
+             <ShieldCheck size={14} className="text-blue-400 shrink-0 mt-0.5" />
+             <p className="text-[9px] text-slate-500 leading-normal font-medium">
+               <span className="text-slate-300">Volatile Storage:</span> 该凭据仅存储在堆栈内存中。刷新页面或关闭标签页将立即物理擦除所有权限。
+             </p>
+          </div>
+        </div>
+      </div>
+      
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-[9px] text-slate-700 font-mono tracking-widest uppercase flex items-center gap-4">
+        <span>StG v3.5.0-Release</span>
+        <div className="w-1 h-1 rounded-full bg-slate-800" />
+        <span>Memory Guard Active</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 主业务仪表盘
+ */
+function Dashboard({ terminalKey }: { terminalKey: string }) {
   const [activeView, setActiveView] = useState<'analysis' | 'history' | 'history-detail' | 'settings'>('analysis');
   const [symbol, setSymbol] = useState('688608');
   const [stockName, setStockName] = useState<string>('');
@@ -141,19 +224,13 @@ export default function App() {
   const [reports, setReports] = useState<Record<string, { text: string; sources?: any[]; score?: number; sentimentMetrics?: SentimentMetrics }>>({});
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [errorRole, setErrorRole] = useState<AgentRole | null>(null);
-  const [errorModel, setErrorModel] = useState<string | null>(null);
-  const [isDailyQuotaExceeded, setIsDailyQuotaExceeded] = useState(false);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [basePrice, setBasePrice] = useState<number>(0);
   const [priceData, setPriceData] = useState<any[]>([]);
   const [historyList, setHistoryList] = useState<HistoryRecord[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<HistoryRecord | null>(null);
   const [filterCode, setFilterCode] = useState('');
-  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [agentModels, setAgentModels] = useState<AgentModelSettings>(DEFAULT_MODELS);
-  const [isEditingModels, setIsEditingModels] = useState(false);
-  const [tempAgentModels, setTempAgentModels] = useState<AgentModelSettings>(DEFAULT_MODELS);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const priceDataRef = useRef<any[]>([]);
@@ -165,12 +242,9 @@ export default function App() {
   const filteredHistory = useMemo(() => {
     return (historyList || []).filter((record) => {
       const searchStr = filterCode.toLowerCase();
-      const matchesSearch = record.symbol.toLowerCase().includes(searchStr) || record.stockName.toLowerCase().includes(searchStr);
-      if (!dateRange || !dateRange[0] || !dateRange[1]) return matchesSearch;
-      const recordDate = dayjs(record.timestamp);
-      return matchesSearch && (recordDate.isAfter(dateRange[0].startOf('day')) || recordDate.isSame(dateRange[0], 'day')) && (recordDate.isBefore(dateRange[1].endOf('day')) || recordDate.isSame(dateRange[1], 'day'));
+      return record.symbol.toLowerCase().includes(searchStr) || record.stockName.toLowerCase().includes(searchStr);
     });
-  }, [historyList, filterCode, dateRange]);
+  }, [historyList, filterCode]);
 
   useEffect(() => {
     let timer: number;
@@ -214,36 +288,24 @@ export default function App() {
     return undefined;
   };
 
-  const handlePauseAnalysis = () => {
-    Modal.confirm({
-      title: '确认暂停分析？',
-      content: '暂停后将立即停止后续所有尚未开始的智能体任务。',
-      okText: '确认暂停',
-      okButtonProps: { danger: true },
-      onOk: () => {
-        shouldStopRef.current = true;
-        notification.info({ message: '分析已中断', description: '流水线已熔断。' });
-      }
-    });
-  };
-
   const runSOP = async () => {
     if (!symbol || isProcessing) return;
     setIsProcessing(true);
     shouldStopRef.current = false;
-    setActions([]); setReports({}); setSelectedReportId(null); setErrorMessage(null); setErrorRole(null); setErrorModel(null);
-    setStockName('正在建立基准行情 (检索环节)...'); setCurrentStep(1);
+    setActions([]); setReports({}); setSelectedReportId(null); setErrorMessage(null);
+    setStockName('核验 API 凭证权限...'); setCurrentStep(1);
 
     let localActions: AgentAction[] = [];
     let localReports: Record<string, { text: string; sources?: any[]; score?: number; sentimentMetrics?: SentimentMetrics }> = {};
 
     try {
+      console.log("🚀 启动分析，API Key 验证中...");
       const stockInfoModel = 'gemini-3-flash-preview';
-      const stockInfo = await geminiService.fetchStockInfo(symbol);
+      const stockInfo = await geminiService.fetchStockInfo(symbol, terminalKey);
       if (shouldStopRef.current) { setIsProcessing(false); return; }
       setBasePrice(stockInfo.price); setStockName(stockInfo.name); initCharts(stockInfo.price);
       
-      setStockName(`配额避让保护中...`);
+      setStockName(`配额保护中...`);
       await waitCooldown(getCooldownByModel(stockInfoModel)); 
       if (shouldStopRef.current) { setIsProcessing(false); return; }
 
@@ -254,7 +316,6 @@ export default function App() {
         { key: 'POLICY', name: '政策环境检索', prompt: INTELLIGENCE_SUB_TASKS.POLICY }
       ];
 
-      // Fix typo here: INTELLIGENCE_OFFICER
       const intelModel = agentModels[AgentRole.INTELLIGENCE_OFFICER] || 'gemini-3-flash-preview';
       let rawIntelFragments = "";
       let allIntelSources: any[] = [];
@@ -271,7 +332,8 @@ export default function App() {
           getPromptForStep(AgentRole.INTELLIGENCE_OFFICER, `${stockInfo.name} (${symbol})`, "", sub.prompt),
           AGENT_SYSTEM_INSTRUCTIONS[AgentRole.INTELLIGENCE_OFFICER],
           true,
-          intelModel
+          intelModel,
+          terminalKey
         );
         rawIntelFragments += `\n\n### [${sub.name}]\n${text}\n`;
         if (sources) allIntelSources = [...allIntelSources, ...sources];
@@ -281,7 +343,7 @@ export default function App() {
       if (shouldStopRef.current) { setIsProcessing(false); return; }
 
       const fusionModel = 'gemini-3-flash-preview';
-      setStockName('正在熔炼全局情报档案 (SSoT)...');
+      setStockName('融合全局情报档案...');
       const uniqueSourcesMap = new Map();
       allIntelSources.forEach(s => {
         const uri = s.web?.uri || s.maps?.uri;
@@ -292,10 +354,11 @@ export default function App() {
 
       const { text: finalDossier } = await geminiService.generateAgentResponse(
         AgentRole.INTELLIGENCE_OFFICER,
-        getPromptForStep(AgentRole.INTELLIGENCE_OFFICER, `${stockInfo.name} (${symbol})`, `以下为碎片化情报，请聚合成一份《全局共享情报档案》，并标注引用序号：\n\n${rawIntelFragments}\n\n### 可用来源列表：\n${sourceReferenceText}`),
+        getPromptForStep(AgentRole.INTELLIGENCE_OFFICER, `${stockInfo.name} (${symbol})`, `碎片情报聚合成《全局共享情报档案》，标注序号：\n\n${rawIntelFragments}\n\n### 来源列表：\n${sourceReferenceText}`),
         AGENT_SYSTEM_INSTRUCTIONS[AgentRole.INTELLIGENCE_OFFICER],
         false,
-        fusionModel
+        fusionModel,
+        terminalKey
       );
 
       localActions = localActions.map(a => a.id === intelActionId ? { ...a, status: 'completed', output: finalDossier, endTime: Date.now() } : a);
@@ -305,14 +368,14 @@ export default function App() {
       if (shouldStopRef.current) { setIsProcessing(false); return; }
 
       const pipeline = [
-        { role: AgentRole.FUNDAMENTAL_ANALYST, step: 2, useSearch: false },
-        { role: AgentRole.SENTIMENT_ANALYST, step: 2, useSearch: false },
-        { role: AgentRole.NEWS_POLICY_ANALYST, step: 2, useSearch: false },
-        { role: AgentRole.TECHNICAL_ANALYST, step: 2, useSearch: false },
-        { role: AgentRole.BULL_RESEARCHER, step: 3, useSearch: false },
-        { role: AgentRole.BEAR_RESEARCHER, step: 3, useSearch: false },
-        { role: AgentRole.RISK_MANAGER, step: 4, useSearch: false },
-        { role: AgentRole.FUND_MANAGER, step: 5, useSearch: false }
+        { role: AgentRole.FUNDAMENTAL_ANALYST, step: 2 },
+        { role: AgentRole.SENTIMENT_ANALYST, step: 2 },
+        { role: AgentRole.NEWS_POLICY_ANALYST, step: 2 },
+        { role: AgentRole.TECHNICAL_ANALYST, step: 2 },
+        { role: AgentRole.BULL_RESEARCHER, step: 3 },
+        { role: AgentRole.BEAR_RESEARCHER, step: 3 },
+        { role: AgentRole.RISK_MANAGER, step: 4 },
+        { role: AgentRole.FUND_MANAGER, step: 5 }
       ];
 
       let analystReportsText = "";
@@ -321,16 +384,16 @@ export default function App() {
         const item = pipeline[i];
         const targetModel = agentModels[item.role] || 'gemini-3-flash-preview';
         setCurrentStep(item.step);
-        setStockName(`正在执行: ${item.role}`);
+        setStockName(`执行智能体: ${item.role}`);
         const actionId = Math.random().toString(36).substr(2, 9);
         localActions = [...localActions, { id: actionId, role: item.role, status: 'working', startTime: Date.now() }];
         setActions([...localActions]); setSelectedReportId(actionId);
 
         try {
-          const inputContext = item.step === 2 ? finalDossier : `### [全局情报档案]\n${finalDossier}\n\n### [各维度分析汇总]\n${analystReportsText}`;
+          const inputContext = item.step === 2 ? finalDossier : `### [前置分析汇总]\n${analystReportsText}`;
           const { text, sources } = await geminiService.generateAgentResponse(
             item.role, getPromptForStep(item.role, `${stockInfo.name} (${symbol})`, inputContext), 
-            AGENT_SYSTEM_INSTRUCTIONS[item.role], item.useSearch, targetModel
+            AGENT_SYSTEM_INSTRUCTIONS[item.role], false, targetModel, terminalKey
           );
           if (item.step === 2) analystReportsText += `\n\n--- ${item.role} 研判 ---\n${text}\n`;
           const score = extractScore(text);
@@ -343,7 +406,7 @@ export default function App() {
           if (i < pipeline.length - 1) await waitCooldown(getCooldownByModel(targetModel));
         } catch (err: any) {
           localActions = localActions.map(a => a.id === actionId ? { ...a, status: 'error' } : a);
-          setActions([...localActions]); setErrorRole(item.role); setErrorModel(targetModel); throw err;
+          setActions([...localActions]); throw err;
         }
       }
 
@@ -356,18 +419,9 @@ export default function App() {
         setHistoryList(prev => [record, ...(prev || [])]);
       }
     } catch (err: any) {
-      const errStr = typeof err === 'string' ? err : (err?.message || JSON.stringify(err));
-      if (errStr.includes("DAILY_QUOTA_EXHAUSTED")) {
-        setIsDailyQuotaExceeded(true);
-        setErrorMessage("检测到 Google API 每日配额耗尽。");
-      } else { setErrorMessage(errStr || "API 响应异常。"); }
+      setErrorMessage(err?.message || "工作流执行异常");
     } finally { setIsProcessing(false); setCurrentStep(6); setCooldownLeft(0); shouldStopRef.current = false; }
   };
-
-  const startEditing = () => { setTempAgentModels({ ...agentModels }); setIsEditingModels(true); };
-  const cancelEditing = () => setIsEditingModels(false);
-  const saveEditing = () => { setAgentModels(tempAgentModels); setIsEditingModels(false); notification.success({ message: '配置已更新' }); };
-  const handleModelChange = (role: AgentRole, model: ModelType) => setTempAgentModels(prev => ({ ...prev, [role]: model }));
 
   const getRoleIcon = (role: AgentRole) => {
     switch (role) {
@@ -400,13 +454,18 @@ export default function App() {
           <button onClick={() => setActiveView('history')} className={`p-3 rounded-xl transition-all ${activeView === 'history' || activeView === 'history-detail' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}><History size={24} /></button>
           <button onClick={() => setActiveView('settings')} className={`p-3 rounded-xl transition-all ${activeView === 'settings' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}><Settings size={24} /></button>
         </div>
+        <div className="mt-auto pt-6 border-t border-slate-800 flex flex-col gap-4">
+           <button onClick={() => window.location.reload()} className="p-3 text-slate-600 hover:text-rose-500 transition-colors" title="注销终端">
+              <Lock size={20} />
+           </button>
+        </div>
       </nav>
 
       <div className="flex flex-col flex-1 overflow-hidden">
         <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#020617]/90 backdrop-blur-xl z-20">
           <div className="flex items-center gap-3">
              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-             <div><h1 className="text-xl font-bold text-white leading-none">StGTrade <span className="text-blue-500">AI</span></h1><p className="text-[9px] text-slate-500 font-mono uppercase tracking-[0.2em] mt-1">Distributed Harvest v3.5.0</p></div>
+             <div><h1 className="text-xl font-bold text-white leading-none">StGTrade <span className="text-blue-500">AI</span></h1><p className="text-[9px] text-slate-500 font-mono uppercase tracking-[0.2em] mt-1">Institutional Terminal v3.5.0</p></div>
           </div>
           {activeView === 'analysis' && (
             <div className="flex items-center gap-4">
@@ -414,17 +473,14 @@ export default function App() {
               {!isProcessing ? (
                 <button onClick={runSOP} className="flex items-center gap-2 px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 font-bold text-sm transition-all"><Play size={16} fill="currentColor" /> 开始分析</button>
               ) : (
-                <button onClick={handlePauseAnalysis} className="flex items-center gap-2 px-6 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20 font-bold text-sm transition-all animate-pulse">{cooldownLeft > 0 ? <Timer size={16} /> : <Square size={14} fill="currentColor" />} 暂停分析 {cooldownLeft > 0 ? `(${cooldownLeft}s)` : ''}</button>
+                <button onClick={() => { shouldStopRef.current = true; notification.info({ message: '分析已请求停止' }); }} className="flex items-center gap-2 px-6 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20 font-bold text-sm transition-all animate-pulse">{cooldownLeft > 0 ? <Timer size={16} /> : <Square size={14} fill="currentColor" />} 暂停分析 {cooldownLeft > 0 ? `(${cooldownLeft}s)` : ''}</button>
               )}
             </div>
           )}
-          {(activeView === 'history' || activeView === 'history-detail') && (
-            <div className="flex items-center gap-3">
-              <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg px-3 py-1">
-                <Search size={14} className="text-slate-500 mr-2" />
-                <input value={filterCode} onChange={(e) => setFilterCode(e.target.value)} placeholder="代码/名称搜索..." className="bg-transparent border-none text-xs text-white focus:outline-none w-32" />
-              </div>
-              <RangePicker size="small" onChange={(dates) => setDateRange(dates as any)} className="bg-slate-900 border-slate-800" />
+          {activeView === 'history' && (
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg px-3 py-1">
+              <Search size={14} className="text-slate-500 mr-2" />
+              <input value={filterCode} onChange={(e) => setFilterCode(e.target.value)} placeholder="名称搜索..." className="bg-transparent border-none text-xs text-white focus:outline-none w-32" />
             </div>
           )}
         </header>
@@ -433,8 +489,8 @@ export default function App() {
           {activeView === 'analysis' && (
             <div className="flex-1 flex overflow-hidden p-6 gap-6">
               <aside className="w-[360px] flex flex-col gap-6">
-                <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm shadow-xl">
-                  <h2 className="text-[11px] font-bold text-slate-500 mb-5 flex items-center gap-2 uppercase tracking-widest"><Activity className="w-3 h-3 text-blue-500" /> 分布式分析进度</h2>
+                <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                  <h2 className="text-[11px] font-bold text-slate-500 mb-5 flex items-center gap-2 uppercase tracking-widest"><Activity className="w-3 h-3 text-blue-500" /> 分析进度</h2>
                   <div className="flex items-center justify-between px-1">
                     {STAGE_NAMES.map((stage) => (
                       <div key={stage.id} className="flex flex-col items-center gap-2">
@@ -445,17 +501,14 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex-1 bg-slate-900/40 border border-slate-800 rounded-2xl flex flex-col overflow-hidden">
-                  <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/20"><span className="text-xs font-bold text-slate-400 uppercase">智能体任务栈</span></div>
+                  <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/20 text-xs font-bold text-slate-400 uppercase tracking-widest">智能体工作栈</div>
                   <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar" ref={scrollRef}>
                     {actions.map((action) => (
                       <div key={action.id} onClick={() => setSelectedReportId(action.id)} className={`p-3 rounded-xl border cursor-pointer transition-all ${selectedReportId === action.id ? 'bg-blue-600/10 border-blue-500/40' : 'bg-slate-800/40 border-slate-800 hover:border-slate-700'}`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <div className={action.status === 'error' ? 'text-rose-500' : action.status === 'working' ? 'text-blue-400 animate-pulse' : ''}>{getRoleIcon(action.role)}</div>
-                            <div className="flex flex-col">
-                              <span className={`text-xs font-bold ${action.status === 'error' ? 'text-rose-400' : 'text-slate-200'}`}>{action.role}</span>
-                              {action.score !== undefined && <span className="text-[9px] font-black text-blue-400 uppercase tracking-tighter">Score: {action.score}</span>}
-                            </div>
+                            <span className={`text-xs font-bold ${action.status === 'error' ? 'text-rose-400' : 'text-slate-200'}`}>{action.role}</span>
                           </div>
                           <span className={`text-[8px] px-1.5 py-0.5 rounded font-mono font-bold ${action.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-400'}`}>{action.status.toUpperCase()}</span>
                         </div>
@@ -467,106 +520,91 @@ export default function App() {
 
               <section className="flex-1 flex flex-col gap-6">
                 <div className="grid grid-cols-3 gap-6">
-                   <div className="col-span-2 bg-slate-900/40 border border-slate-800 rounded-2xl p-5 h-60 relative overflow-hidden group">
+                   <div className="col-span-2 bg-slate-900/40 border border-slate-800 rounded-2xl p-5 h-60 relative">
                       <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-2"><TrendingUp size={12} className="text-blue-500"/> 预期股价变化 (180D)</h3>
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-2 tracking-widest"><TrendingUp size={12} className="text-blue-500"/> 预期价格模型</h3>
                         <div className="flex flex-col items-end">
-                          <span className="text-[10px] text-slate-500 uppercase font-mono tracking-tighter">预期终值 (较分析基准)</span>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${priceTrend >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>{priceTrend >= 0 ? '+' : ''}{priceTrend.toFixed(2)}%</span>
-                            <span className={`text-2xl font-black font-mono leading-none ${priceTrend >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>¥{lastPrice.toFixed(2)}</span>
-                          </div>
+                          <span className="text-[10px] text-slate-500 uppercase font-mono tracking-tighter">预期现值</span>
+                          <span className={`text-2xl font-black font-mono leading-none ${priceTrend >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>¥{lastPrice.toFixed(2)}</span>
                         </div>
                       </div>
                       <div className="h-40 mt-4">
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart data={priceData}>
-                            <XAxis dataKey="date" hide /><YAxis domain={['auto', 'auto']} hide /><Tooltip content={<CustomPriceTooltip />} />
-                            <Area type="monotone" dataKey="price" stroke="#3b82f6" fill="url(#pGrad)" strokeWidth={3} dot={false} />
+                            <Area type="monotone" dataKey="price" stroke="#3b82f6" fillOpacity={0.1} fill="#3b82f6" strokeWidth={3} dot={false} />
                           </AreaChart>
                         </ResponsiveContainer>
                       </div>
                    </div>
-                   <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 h-60 flex flex-col overflow-hidden">
-                      <h3 className="text-[11px] font-bold text-slate-500 uppercase mb-5 flex items-center gap-2"><MessageSquare size={12} className="text-emerald-500"/> 舆情多维透视</h3>
-                      <div className="flex-1 flex flex-col justify-center px-1 pb-2"><SentimentMetricsPanel metrics={currentSentimentMetrics} isWorking={actions.find(a=>a.role===AgentRole.SENTIMENT_ANALYST)?.status==='working'} /></div>
+                   <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 h-60">
+                      <h3 className="text-[11px] font-bold text-slate-500 uppercase mb-5 tracking-widest">舆情引擎</h3>
+                      <SentimentMetricsPanel metrics={currentSentimentMetrics} isWorking={actions.find(a=>a.role===AgentRole.SENTIMENT_ANALYST)?.status==='working'} />
                    </div>
                 </div>
                 <div className="flex-1 bg-slate-900/30 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl backdrop-blur-md">
                   <div className="px-6 py-4 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
-                    <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-500 border border-blue-500/20"><FileText size={20} /></div><h2 className="text-sm font-black text-white uppercase tracking-tight">{selectedReportId ? actions.find(a => a.id === selectedReportId)?.role : '分布式分析系统'}</h2></div>
-                    {stockName && <div className="text-[10px] font-mono font-bold text-blue-400 flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> {stockName}</div>}
+                    <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-500 border border-blue-500/20"><FileText size={20} /></div><h2 className="text-sm font-black text-white uppercase tracking-tight">{selectedReportId ? actions.find(a => a.id === selectedReportId)?.role : '分析报告库'}</h2></div>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-10 custom-scrollbar bg-[#020617]/40">
+                  <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
                     {selectedReportId && reports[selectedReportId] ? (
                       <div className="markdown-content max-w-4xl mx-auto">
                         <div className="whitespace-pre-wrap text-slate-300 leading-relaxed text-base">{reports[selectedReportId].text}</div>
                         <GroundingSources sources={reports[selectedReportId].sources} />
                       </div>
-                    ) : <div className="h-full flex flex-col items-center justify-center text-slate-700 opacity-40"><RefreshCw size={80} strokeWidth={0.5} className="animate-spin-slow" /><p className="text-xl font-bold mt-4 tracking-tighter uppercase">Initializing Dossier Fragments</p></div>}
+                    ) : <div className="h-full flex flex-col items-center justify-center text-slate-700 opacity-40"><RefreshCw size={80} strokeWidth={0.5} className="animate-spin-slow" /><p className="text-lg font-bold mt-4 tracking-tighter uppercase">准备中...</p></div>}
                   </div>
                 </div>
               </section>
             </div>
           )}
           {activeView === 'history' && (
-            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-              <div className="max-w-6xl mx-auto">
-                <div className="flex justify-between items-center mb-10">
-                   <h2 className="text-3xl font-black text-white tracking-tighter flex items-center gap-3"><History size={32} className="text-blue-500" /> 历史决策档案库</h2>
-                   <div className="text-slate-500 text-xs font-mono uppercase tracking-widest">Records: {filteredHistory.length}</div>
+             <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+                <div className="max-w-6xl mx-auto">
+                   <h2 className="text-3xl font-black text-white tracking-tighter flex items-center gap-3 mb-10"><History size={32} className="text-blue-500" /> 历史记录</h2>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredHistory.map((record) => (
+                         <div key={record.id} onClick={() => { setSelectedHistory(record); setActiveView('history-detail'); }} className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-blue-500 transition-all">
+                            <h3 className="text-lg font-bold text-white mb-1">{record.stockName}</h3>
+                            <p className="text-xs font-mono text-slate-500 mb-6">{record.symbol}</p>
+                         </div>
+                      ))}
+                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {filteredHistory.map((record) => (
-                     <div key={record.id} onClick={() => { setSelectedHistory(record); setActiveView('history-detail'); }} className="group relative bg-slate-900/40 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-blue-500/50 hover:bg-slate-800/40 transition-all shadow-lg hover:shadow-blue-500/10">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="p-2 bg-blue-600/10 rounded-lg text-blue-500"><BarChart3 size={20} /></div>
-                          <span className="text-[10px] font-mono text-slate-500">{record.timestamp}</span>
-                        </div>
-                        <h3 className="text-lg font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{record.stockName}</h3>
-                        <p className="text-xs font-mono text-slate-500 mb-6">{record.symbol}</p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
-                           <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /><span className="text-[10px] font-bold text-slate-400 uppercase">Analysis Complete</span></div>
-                           <ChevronRight size={16} className="text-slate-600 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
-                        </div>
-                     </div>
-                   ))}
-                </div>
-              </div>
-            </div>
+             </div>
           )}
           {activeView === 'settings' && (
-            <div className="flex-1 flex flex-col p-10 overflow-hidden bg-[#020617]">
-               <div className="max-w-6xl mx-auto w-full overflow-hidden flex flex-col h-full">
-                 <div className="flex justify-between items-center mb-8">
-                   <h2 className="text-3xl font-black text-white tracking-tighter flex items-center gap-3"><Settings size={32} className="text-blue-500" /> 智能体算力配置中心</h2>
-                   <div className="flex gap-3">
-                     {!isEditingModels ? (
-                       <button onClick={startEditing} className="flex items-center gap-2 px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-lg shadow-blue-600/20"><Edit3 size={18} /> 编辑配置</button>
-                     ) : (
-                       <div className="flex gap-2">
-                         <button onClick={cancelEditing} className="px-6 py-2 rounded-lg bg-slate-800 text-white font-bold">取消</button>
-                         <button onClick={saveEditing} className="px-6 py-2 rounded-lg bg-emerald-600 text-white font-bold">保存</button>
-                       </div>
-                     )}
+             <div className="flex-1 p-10 bg-[#020617]">
+                <div className="max-w-4xl mx-auto">
+                   <h2 className="text-3xl font-black text-white tracking-tighter flex items-center gap-3 mb-10"><Settings size={32} className="text-blue-500" /> 算力配置</h2>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {Object.values(AgentRole).map((role) => (
+                         <div key={role} className="p-5 rounded-2xl border border-slate-800 bg-slate-900/40 flex flex-col justify-between h-32">
+                            <h4 className="text-slate-200 font-bold text-sm">{role}</h4>
+                            <Select value={agentModels[role]} onChange={(val) => setAgentModels(prev => ({ ...prev, [role]: val as ModelType }))} className="w-full" options={[{ value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro' }, { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' }]} />
+                         </div>
+                      ))}
                    </div>
-                 </div>
-                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pb-10 custom-scrollbar pr-2">
-                    {Object.values(AgentRole).map((role) => (
-                      <div key={role} className={`transition-all p-5 rounded-2xl border bg-slate-900/40 h-44 flex flex-col justify-between ${isEditingModels ? 'border-blue-500/40 ring-1 ring-blue-500/10' : 'border-slate-800'}`}>
-                        <div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-slate-800/50">{getRoleIcon(role)}</div><h4 className="text-slate-200 font-bold text-sm">{role}</h4></div>
-                        <div className="space-y-3">
-                           <p className="text-[10px] text-slate-500 uppercase font-mono tracking-widest">模型选型</p>
-                           <Select value={isEditingModels ? tempAgentModels[role] : agentModels[role]} onChange={(val) => handleModelChange(role, val as ModelType)} disabled={!isEditingModels} className="w-full" options={[{ value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro (高精度)' }, { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (平衡)' }, { value: 'gemini-flash-lite-latest', label: 'Gemini Lite (极速)' }]} />
-                        </div>
-                      </div>
-                    ))}
-                 </div>
-               </div>
-            </div>
+                </div>
+             </div>
           )}
         </main>
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  const [terminalKey, setTerminalKey] = useState<string | null>(null);
+
+  return (
+    <ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: { colorPrimary: '#3b82f6' } }}>
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        {!terminalKey ? (
+          <AuthGate onInitialize={(key) => setTerminalKey(key)} />
+        ) : (
+          <Dashboard terminalKey={terminalKey} />
+        )}
+      </div>
+    </ConfigProvider>
   );
 }

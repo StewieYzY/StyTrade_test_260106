@@ -40,9 +40,13 @@ export class GeminiTradingService {
     }
   }
 
-  // Use process.env.API_KEY directly as per guidelines
-  async fetchStockInfo(symbol: string): Promise<{ name: string; price: number }> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  /**
+   * 检索股票基础信息
+   * @param symbol 股票代码
+   * @param apiKey 用户输入的 API Key
+   */
+  async fetchStockInfo(symbol: string, apiKey: string): Promise<{ name: string; price: number }> {
+    const ai = new GoogleGenAI({ apiKey });
     return this.callWithRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview', 
@@ -64,15 +68,19 @@ export class GeminiTradingService {
     });
   }
 
-  // Use process.env.API_KEY directly as per guidelines
+  /**
+   * 生成智能体响应
+   * @param apiKey 用户输入的 API Key
+   */
   async generateAgentResponse(
     role: AgentRole,
     prompt: string,
     systemInstruction: string,
     useSearch: boolean = false,
-    modelName: string = 'gemini-3-flash-preview'
+    modelName: string = 'gemini-3-flash-preview',
+    apiKey: string
   ): Promise<{ text: string; sources?: any[] }> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     return this.callWithRetry(async () => {
       const isAnalysisRole = [
         AgentRole.FUNDAMENTAL_ANALYST, 
